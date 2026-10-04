@@ -58,3 +58,19 @@ class DipRun(models.Model):
 
     def __str__(self):
         return f"Dip@{self.roll_id} {self.started_at}"
+
+
+class LoftDipCap(models.Model):
+    """帆布间当日新登记浸渍条数封顶配置（每间一行）。"""
+
+    loft = models.OneToOneField(Loft, on_delete=models.CASCADE, related_name="dip_cap")
+    daily_cap = models.PositiveIntegerField(default=20)
+    enabled = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["loft_id"]
+
+    def __str__(self):
+        state = "启用" if self.enabled else "停用"
+        return f"{self.loft.name} 日封顶 {self.daily_cap} 条（{state}）"

@@ -1,7 +1,21 @@
+from django.db import transaction
 from rest_framework import serializers
+from rest_framework.exceptions import APIException
 
-from .models import ClothRoll, DipRun, Loft
-from .rules import can_mark_roll_cured
+from .models import ClothRoll, DipRun, Loft, LoftDipCap
+from .rules import (
+    can_mark_roll_cured,
+    dip_cap_block_reason,
+    dips_used_today,
+    lock_dip_cap,
+)
+
+
+class DailyDipCapExceeded(APIException):
+    """当日该帆布间新登记浸渍条数到顶。"""
+
+    status_code = 400
+    default_code = "daily_dip_cap_exceeded"
 
 
 class LoftSerializer(serializers.ModelSerializer):
@@ -93,3 +107,44 @@ class DipRunSerializer(serializers.ModelSerializer):
             "created_at",
         )
         read_only_fields = ("id", "rollCode", "loftName", "created_at")
+
+    def create(self, validated_data):
+        roll = validated_data["roll"]
+        loft = roll.loft
+        # 行锁 + 事务：计数、校验、写入串行化，两名浸胶工并发登记也不会超登
+        with transaction.atomic():
+            cap = lock_dip_cap(loft)
+            used = dips_used_today(loft)
+            reason = dip_cap_block_reason(loft, cap, used)
+            if reason:
+                raise DailyDipCapExceeded(detail=reason)
+            return super().create(validated_data)
+
+
+class LoftDipCapSerializer(serializers.ModelSerializer):
+    loftId = serializers.IntegerField(source="loft_id", read_only=True)
+    loftName = serializers.CharField(source="loft.name", read_only=True)
+    dailyCap = serializers.IntegerField(source="daily_cap", min_value=1, max_value=100000)
+    usedToday = serializers.SerializerMethodField()
+    remainingToday = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LoftDipCap
+        fields = (
+            "id",
+            "loftId",
+            "loftName",
+            "enabled",
+            "dailyCap",
+            "usedToday",
+            "remainingToday",
+        )
+        read_only_fields = ("id", "loftId", "loftName", "usedToday", "remainingToday")
+
+    def get_usedToday(self, obj):
+        return dips_used_today(obj.loft)
+
+    def get_remainingToday(self, obj):
+        if not obj.enabled:
+            return None
+        return max(obj.daily_cap - dips_used_today(obj.loft), 0)
