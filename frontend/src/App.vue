@@ -19,6 +19,20 @@ function logout() {
     <router-view />
   </div>
   <div v-else class="layout">
+    <header class="topbar">
+      <div class="topbar-brand">
+        <span class="mark">帆</span>
+        <strong>SailCloth</strong>
+      </div>
+      <nav class="topbar-nav">
+        <router-link to="/">晾晒架</router-link>
+        <router-link to="/caps">日条数封顶</router-link>
+      </nav>
+      <div class="topbar-user">
+        <span>{{ auth.user?.username }}</span>
+        <button class="linkish" type="button" @click="logout">退出</button>
+      </div>
+    </header>
     <aside class="side">
       <div class="brand">
         <span class="mark">帆</span>
@@ -27,13 +41,13 @@ function logout() {
       </div>
       <nav>
         <router-link to="/">晾晒架</router-link>
+        <router-link to="/caps">日条数封顶</router-link>
       </nav>
       <div class="nav-secondary">
         <p class="nav-sec-label">台账（次要）</p>
         <router-link to="/rolls">布卷台账</router-link>
         <router-link to="/dips">浸渍台账</router-link>
       </div>
-      <button class="linkish" type="button" @click="logout">退出 {{ auth.user?.username }}</button>
     </aside>
     <main class="content">
       <router-view />

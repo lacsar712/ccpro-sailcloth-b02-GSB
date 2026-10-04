@@ -58,3 +58,21 @@ class DipRun(models.Model):
 
     def __str__(self):
         return f"Dip@{self.roll_id} {self.started_at}"
+
+
+class DailyDipCap(models.Model):
+    """某帆布间「当天允许新登记浸渍条数」的封顶设置。与 Loft 一一对应。"""
+
+    loft = models.OneToOneField(
+        Loft, on_delete=models.CASCADE, related_name="daily_dip_cap"
+    )
+    enabled = models.BooleanField(default=False)
+    limit = models.PositiveIntegerField(default=10)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["loft_id"]
+
+    def __str__(self):
+        state = f"{self.limit} 条/天" if self.enabled else "未启用"
+        return f"{self.loft.name} 日封顶（{state}）"

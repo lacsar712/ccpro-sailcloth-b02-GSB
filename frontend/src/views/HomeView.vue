@@ -39,6 +39,20 @@ const selectedDips = computed(() => {
   return dips.value.filter((d) => d.rollId === selectedId.value)
 })
 
+const selectedCap = computed(() => {
+  if (!selected.value) return null
+  const loft = lofts.value.find((l) => l.id === selected.value.loftId)
+  if (!loft) return null
+  const used = loft.capUsedToday ?? 0
+  const enabled = !!loft.capEnabled
+  return {
+    enabled,
+    limit: loft.capLimit,
+    used,
+    full: enabled && used >= loft.capLimit,
+  }
+})
+
 const recentFeed = computed(() => dips.value.slice(0, 12))
 
 async function load() {
@@ -149,6 +163,16 @@ onMounted(load)
         <div class="bay-rail">
           <span class="bay-name">{{ group.loft.name }}</span>
           <span class="bay-meta">{{ group.loft.location || '工位' }} · {{ group.rolls.length }} 卷</span>
+          <span
+            v-if="group.loft.capEnabled"
+            class="bay-cap"
+            :class="{ 'is-full': (group.loft.capUsedToday ?? 0) >= group.loft.capLimit }"
+          >
+            今日浸渍 {{ group.loft.capUsedToday ?? 0 }}/{{ group.loft.capLimit }}
+          </span>
+          <span v-else-if="group.loft.capUsedToday != null" class="bay-meta">
+            今日已登 {{ group.loft.capUsedToday }} 条·未封顶
+          </span>
         </div>
         <div class="peg-row">
           <button
@@ -242,6 +266,15 @@ onMounted(load)
 
       <form class="drawer-form" @submit.prevent="logDip">
         <h3>登记浸渍</h3>
+        <p v-if="selectedCap" class="cap-line" :class="{ 'is-full': selectedCap.full }">
+          <template v-if="selectedCap.enabled">
+            本帆布间今日新登记浸渍 {{ selectedCap.used }}/{{ selectedCap.limit }} 条
+            <span v-if="selectedCap.full">（已满，再写会被挡下，原因见下）</span>
+          </template>
+          <template v-else>
+            本帆布间日封顶未启用（今日已登 {{ selectedCap.used }} 条）
+          </template>
+        </p>
         <label>开始时间
           <input v-model="dipForm.startedAt" type="datetime-local" required />
         </label>

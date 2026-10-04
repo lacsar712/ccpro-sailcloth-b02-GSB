@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from core.models import ClothRoll, DipRun, Loft
+from core.models import ClothRoll, DailyDipCap, DipRun, Loft
 
 User = get_user_model()
 
@@ -41,6 +41,18 @@ class Command(BaseCommand):
         worker.role = User.ROLE_WORKER
         worker.save()
         self.stdout.write(self.style.SUCCESS(f"worker {'created' if created else 'updated'}"))
+
+        worker2, created = User.objects.get_or_create(
+            username="worker2",
+            defaults={
+                "email": "worker2@sailcloth.local",
+                "role": User.ROLE_WORKER,
+            },
+        )
+        worker2.set_password("123456")
+        worker2.role = User.ROLE_WORKER
+        worker2.save()
+        self.stdout.write(self.style.SUCCESS(f"worker2 {'created' if created else 'updated'}"))
 
         if Loft.objects.exists():
             self.stdout.write("业务数据已存在，跳过业务种子写入。")
@@ -93,3 +105,10 @@ class Command(BaseCommand):
                 f"浸渍 {DipRun.objects.count()}"
             )
         )
+
+        # 演示用：北岸默认启用日条数封顶（信号已建好对应行）
+        cap = DailyDipCap.objects.get(loft=loft)
+        cap.enabled = True
+        cap.limit = 20
+        cap.save()
+        self.stdout.write(self.style.SUCCESS("种子完成：北岸帆布间日封顶启用，20 条/天"))

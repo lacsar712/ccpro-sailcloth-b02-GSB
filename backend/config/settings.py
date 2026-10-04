@@ -54,7 +54,9 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.postgresql",
+        "ENGINE": os.environ.get(
+            "POSTGRES_ENGINE", "django.db.backends.postgresql"
+        ),
         "NAME": os.environ.get("POSTGRES_DB", "sailcloth"),
         "USER": os.environ.get("POSTGRES_USER", "sailcloth"),
         "PASSWORD": os.environ.get("POSTGRES_PASSWORD", "sailcloth"),

@@ -1,21 +1,89 @@
 from rest_framework import serializers
 
-from .models import ClothRoll, DipRun, Loft
-from .rules import can_mark_roll_cured
+from .models import ClothRoll, DailyDipCap, DipRun, Loft
+from .rules import can_mark_roll_cured, check_daily_dip_cap, count_dips_inserted_today
+
+
+class DailyDipCapSerializer(serializers.ModelSerializer):
+    loftName = serializers.CharField(source="loft.name", read_only=True)
+    usedToday = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DailyDipCap
+        fields = ("id", "loft", "loftName", "enabled", "limit", "usedToday", "updated_at")
+        read_only_fields = ("id", "loft", "loftName", "usedToday", "updated_at")
+        extra_kwargs = {
+            "limit": {"min_value": 0},
+        }
+
+    def get_usedToday(self, obj):
+        return count_dips_inserted_today(obj.loft)
 
 
 class LoftSerializer(serializers.ModelSerializer):
     rollCount = serializers.SerializerMethodField()
+    capEnabled = serializers.BooleanField(source="daily_dip_cap.enabled", required=False)
+    capLimit = serializers.IntegerField(
+        source="daily_dip_cap.limit", required=False, min_value=0
+    )
+    capUsedToday = serializers.SerializerMethodField()
 
     class Meta:
         model = Loft
-        fields = ("id", "name", "location", "notes", "rollCount", "created_at")
-        read_only_fields = ("id", "rollCount", "created_at")
+        fields = (
+            "id",
+            "name",
+            "location",
+            "notes",
+            "rollCount",
+            "capEnabled",
+            "capLimit",
+            "capUsedToday",
+            "created_at",
+        )
+        read_only_fields = ("id", "rollCount", "capUsedToday", "created_at")
 
     def get_rollCount(self, obj):
         if hasattr(obj, "roll_count"):
             return obj.roll_count
         return obj.rolls.count()
+
+    def get_capUsedToday(self, obj):
+        cap = getattr(obj, "daily_dip_cap", None)
+        if cap is None:
+            return None
+        return count_dips_inserted_today(obj)
+
+    def _cap_payload(self, validated_data):
+        return validated_data.pop("daily_dip_cap", None)
+
+    def _apply_cap(self, instance, cap_data):
+        if cap_data is None:
+            return
+        cap, _ = DailyDipCap.objects.get_or_create(loft=instance)
+        changed = False
+        if "enabled" in cap_data:
+            cap.enabled = cap_data["enabled"]
+            changed = True
+        if "limit" in cap_data:
+            cap.limit = cap_data["limit"]
+            changed = True
+        if changed:
+            cap.save()
+
+    def create(self, validated_data):
+        cap_data = self._cap_payload(validated_data)
+        loft = super().create(validated_data)
+        # post_save 信号已建行；补上客户端可能提交的封顶设置
+        self._apply_cap(loft, cap_data or {})
+        return loft
+
+    def update(self, instance, validated_data):
+        cap_data = self._cap_payload(validated_data)
+        super().update(instance, validated_data)
+        if cap_data is not None:
+            self._apply_cap(instance, cap_data)
+        return instance
 
 
 class ClothRollSerializer(serializers.ModelSerializer):
